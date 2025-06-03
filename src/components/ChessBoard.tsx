@@ -1,7 +1,8 @@
-import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import ChessSquare from './ChessSquare';
-import { ChessBoard as ChessBoardType, ChessMove, ChessPosition, GameState, PieceColor, ChessPiece } from '../types/chess-types';
-import { initializeBoard, isValidPosition } from '../utils/chess-utils';
+import PawnPromotionDialog from './PawnPromotionDialog';
+import { ChessMove, ChessPosition, GameState, PieceColor, ChessPiece, PieceType } from '../types/chess-types';
+import { initializeBoard } from '../utils/chess-utils';
 import { getValidMoves, isCheckmate, isKingInCheck, isStalemate } from '../utils/move-validation';
 import { useSoundEffects } from '../hooks/useSoundEffects';
 
@@ -11,7 +12,8 @@ interface ChessBoardProps {
 }
 
 const ChessBoard = forwardRef<{resetBoard: () => void, undoLastMove: () => void}, ChessBoardProps>(
-  ({ onMove, onGameEnd }, ref) => {  const [gameState, setGameState] = useState<GameState>({
+  ({ onMove, onGameEnd }, ref) => {
+  const [gameState, setGameState] = useState<GameState>({
     board: initializeBoard(),
     currentTurn: 'white',
     status: 'playing',
@@ -23,6 +25,14 @@ const ChessBoard = forwardRef<{resetBoard: () => void, undoLastMove: () => void}
       black: [] as ChessPiece[],
     },
   });
+
+  // Pawn promotion state
+  const [showPawnPromotion, setShowPawnPromotion] = useState(false);
+  const [pendingPromotion, setPendingPromotion] = useState<{
+    from: ChessPosition;
+    to: ChessPosition;
+    color: PieceColor;
+  } | null>(null);
 
   // Add sound effects
   const { playMove, playCapture, playCheck, playCastle, playGameEnd } = useSoundEffects();
@@ -69,16 +79,35 @@ const ChessBoard = forwardRef<{resetBoard: () => void, undoLastMove: () => void}
       // Check if the move is valid
       const isValidMove = validMoves.some(
         move => move.row === position.row && move.col === position.col
-      );
-
-      if (isValidMove) {
-        makeMove(selectedPosition, position);
+      );      if (isValidMove) {
+        // Check for pawn promotion
+        const movingPiece = gameState.board[selectedPosition.row][selectedPosition.col];
+        const isPromotionMove = movingPiece?.type === 'pawn' && 
+          ((movingPiece.color === 'white' && position.row === 0) ||
+           (movingPiece.color === 'black' && position.row === 7));
+        
+        if (isPromotionMove) {
+          // Show pawn promotion dialog
+          setPendingPromotion({
+            from: selectedPosition,
+            to: position,
+            color: movingPiece.color
+          });
+          setShowPawnPromotion(true);
+          // Clear selection but don't make the move yet
+          setGameState({
+            ...gameState,
+            selectedPosition: null,
+            validMoves: [],
+          });
+        } else {
+          makeMove(selectedPosition, position);
+        }
       }
     }
   };
-
   // Execute a chess move
-  const makeMove = (from: ChessPosition, to: ChessPosition) => {
+  const makeMove = (from: ChessPosition, to: ChessPosition, promotionPiece?: PieceType) => {
     const { board, currentTurn, moveHistory, capturedPieces } = gameState;
     const newBoard = board.map(row => [...row]);
     
@@ -152,23 +181,36 @@ const ChessBoard = forwardRef<{resetBoard: () => void, undoLastMove: () => void}
         newBoard[capturedPawnRow][capturedPawnCol] = null;
       }
     }
-    
-    // Check if a pawn just moved two squares (for future en passant captures)
+      // Check if a pawn just moved two squares (for future en passant captures)
     const isMovingTwoSquares = 
       movingPiece.type === 'pawn' && 
       Math.abs(from.row - to.row) === 2;
     
-    // Move the piece with appropriate flags
-    newBoard[to.row][to.col] = { 
-      ...movingPiece, 
-      hasMoved: true,
-      justMovedTwo: isMovingTwoSquares
-    };
+    // Handle pawn promotion
+    const isPromotion = movingPiece.type === 'pawn' && 
+      ((movingPiece.color === 'white' && to.row === 0) ||
+       (movingPiece.color === 'black' && to.row === 7));
+    
+    // Move the piece with appropriate flags and handle promotion
+    if (isPromotion && promotionPiece) {
+      newBoard[to.row][to.col] = { 
+        type: promotionPiece,
+        color: movingPiece.color,
+        hasMoved: true
+      };
+    } else {
+      newBoard[to.row][to.col] = { 
+        ...movingPiece, 
+        hasMoved: true,
+        justMovedTwo: isMovingTwoSquares
+      };
+    }
     newBoard[from.row][from.col] = null;    // Record the move
     const move: ChessMove = {
       from,
       to,
       capturedPiece: isEnPassant ? capturedPiece || newBoard[from.row][to.col] : capturedPiece,
+      promotion: isPromotion ? promotionPiece : undefined,
       isCastle,
       isEnPassant,
     };
@@ -228,6 +270,23 @@ const ChessBoard = forwardRef<{resetBoard: () => void, undoLastMove: () => void}
     if (newStatus === 'check') playCheck();
     if (newStatus === 'checkmate') playGameEnd();
     if (newStatus === 'stalemate') playGameEnd();
+  };
+
+  // Pawn promotion handlers
+  const handlePawnPromotion = (pieceType: PieceType) => {
+    if (!pendingPromotion) return;
+    
+    const { from, to } = pendingPromotion;
+    setShowPawnPromotion(false);
+    setPendingPromotion(null);
+    
+    // Execute the move with promotion
+    makeMove(from, to, pieceType);
+  };
+  
+  const handlePromotionCancel = () => {
+    setShowPawnPromotion(false);
+    setPendingPromotion(null);
   };
 
   // Determine if a square is a valid move destination
@@ -306,7 +365,7 @@ const ChessBoard = forwardRef<{resetBoard: () => void, undoLastMove: () => void}
     );
   };
 
-    // Reset the board to initial state
+  // Reset the board to initial state
   const resetBoard = () => {
     setGameState({
       board: initializeBoard(),
@@ -320,6 +379,10 @@ const ChessBoard = forwardRef<{resetBoard: () => void, undoLastMove: () => void}
         black: [] as ChessPiece[],
       },
     });
+    
+    // Reset pawn promotion state
+    setShowPawnPromotion(false);
+    setPendingPromotion(null);
   };
 
   // Undo the last move
@@ -334,16 +397,24 @@ const ChessBoard = forwardRef<{resetBoard: () => void, undoLastMove: () => void}
     
     // Create a new board
     const newBoard = gameState.board.map(row => [...row]);
-    
-    // Move the piece back
+      // Move the piece back
     const movingPiece = newBoard[lastMove.to.row][lastMove.to.col];
     if (movingPiece) {
-      // Reset the hasMoved flag if this was the piece's first move
-      const wasFirstMove = !movingPiece.hasMoved || moveHistory.length === 1;
-      newBoard[lastMove.from.row][lastMove.from.col] = {
-        ...movingPiece,
-        hasMoved: wasFirstMove ? false : true,
-      };
+      // Handle pawn promotion undo - restore original pawn
+      if (lastMove.promotion) {
+        newBoard[lastMove.from.row][lastMove.from.col] = {
+          type: 'pawn',
+          color: movingPiece.color,
+          hasMoved: true, // Pawn that reached promotion had moved
+        };
+      } else {
+        // Reset the hasMoved flag if this was the piece's first move
+        const wasFirstMove = !movingPiece.hasMoved || moveHistory.length === 1;
+        newBoard[lastMove.from.row][lastMove.from.col] = {
+          ...movingPiece,
+          hasMoved: wasFirstMove ? false : true,
+        };
+      }
     }
     
     // Restore captured piece if any
@@ -425,7 +496,15 @@ const ChessBoard = forwardRef<{resetBoard: () => void, undoLastMove: () => void}
         {gameState.status === 'checkmate' && `Checkmate! ${gameState.currentTurn === 'white' ? 'Black' : 'White'} wins!`}
         {gameState.status === 'stalemate' && 'Stalemate! The game is a draw.'}
         {gameState.status === 'playing' && `${gameState.currentTurn.charAt(0).toUpperCase() + gameState.currentTurn.slice(1)}'s turn`}
-      </div>
+      </div>      {/* Pawn Promotion Dialog */}
+      {showPawnPromotion && pendingPromotion && (
+        <PawnPromotionDialog 
+          isOpen={showPawnPromotion}
+          color={pendingPromotion.color}
+          onPromotion={handlePawnPromotion}
+          onCancel={handlePromotionCancel}
+        />
+      )}
     </div>
   );
 });

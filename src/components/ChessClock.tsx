@@ -17,12 +17,11 @@ const ChessClock: React.FC<ChessClockProps> = ({
   const [whiteTime, setWhiteTime] = useState(initialTime);
   const [blackTime, setBlackTime] = useState(initialTime);
 
-  // Reset timers when game state changes
+  // Reset timers when initialTime changes (new game or time control change)
   useEffect(() => {
-    if (!isGameActive) {
-      return;
-    }
-  }, [isGameActive]);
+    setWhiteTime(initialTime);
+    setBlackTime(initialTime);
+  }, [initialTime]);
 
   // Timer effect
   useEffect(() => {

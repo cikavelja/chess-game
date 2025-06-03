@@ -1,4 +1,4 @@
-import { ChessBoard, ChessMove, ChessPiece, ChessPosition, PieceColor } from '../types/chess-types';
+import { ChessBoard, ChessMove, ChessPosition, PieceColor } from '../types/chess-types';
 import { isValidPosition } from './chess-utils';
 
 export function getValidMoves(

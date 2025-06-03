@@ -6,7 +6,7 @@ import MoveHistory from './components/MoveHistory';
 import GameControls from './components/GameControls';
 import GameEndDialog from './components/GameEndDialog';
 import ChessClock from './components/ChessClock';
-import { ChessMove, PieceColor, GameStatus } from './types/chess-types';
+import { ChessMove, PieceColor } from './types/chess-types';
 
 function App() {
   // Game state is managed in the ChessBoard component
@@ -97,6 +97,10 @@ function App() {
     }
   };
 
+  const handleTimeControlChange = (minutes: number) => {
+    setTimeControl(minutes * 60);
+  };
+
   return (
     <div className='container mx-auto px-4 py-8'>
       <h1 className='text-4xl font-bold text-center mb-8'>Chess Game</h1>
@@ -111,6 +115,7 @@ function App() {
           
           <div className='mt-4'>
             <ChessClock
+              key={`${timeControl}-${gameStatus}-${moveHistory.length}`}
               currentTurn={moveHistory.length % 2 === 0 ? 'white' : 'black'}
               isGameActive={gameStatus === 'playing'}
               initialTime={timeControl}
@@ -132,6 +137,24 @@ function App() {
             canUndo={moveHistory.length > 0}
             gameStatus={gameStatus}
           />
+          
+          {/* Time Control Settings */}
+          <div className='p-4 bg-gray-100 rounded-lg shadow'>
+            <h3 className='font-bold mb-2'>Time Control</h3>
+            <select 
+              value={timeControl / 60}
+              onChange={(e) => handleTimeControlChange(Number(e.target.value))}
+              className='w-full p-2 border rounded'
+            >
+              <option value={5}>5 minutes</option>
+              <option value={10}>10 minutes</option>
+              <option value={15}>15 minutes</option>
+              <option value={30}>30 minutes</option>
+            </select>
+            <p className='text-xs text-gray-500 mt-1'>
+              Time control applies to new games
+            </p>
+          </div>
         </div>
       </div>
       
