@@ -1,0 +1,133 @@
+import React, { useRef, useState } from "react";
+import "./App.css";
+import ChessBoard from "./components/ChessBoard";
+import CapturedPieces from "./components/CapturedPieces";
+import MoveHistory from "./components/MoveHistory";
+import GameControls from "./components/GameControls";
+import GameEndDialog from "./components/GameEndDialog";
+import ChessClock from "./components/ChessClock"; React, { useRef, useState } from "react";
+import "./App.css";
+import ChessBoard from "./components/ChessBoard";
+import CapturedPieces from "./components/CapturedPieces";
+import MoveHistory from "./components/MoveHistory";
+import GameControls from "./components/GameControls";
+import GameEndDialog from "./components/GameEndDialog";
+import ChessClock from "./components/ChessClock";
+import { ChessMove, PieceColor, GameStatus } from "./types/chess-types";
+
+function App() {
+  // Game state is managed in the ChessBoard component
+  const [moveHistory, setMoveHistory] = useState<ChessMove[]>([]);
+  const [capturedPieces, setCapturedPieces] = useState<{white: any[], black: any[]}>({
+    white: [],
+    black: []
+  });
+  const [gameStatus, setGameStatus] = useState<string>("playing");
+  const [showGameEndDialog, setShowGameEndDialog] = useState(false);
+  const [gameWinner, setGameWinner] = useState<PieceColor | 'draw' | null>(null);
+  const chessBoardRef = useRef<any>(null);
+  
+  const handleMove = (move: ChessMove) => {
+    setMoveHistory(prev => [...prev, move]);
+    
+    // Update captured pieces
+    if (move.capturedPiece) {
+      setCapturedPieces(prev => {
+        if (move.capturedPiece?.color === ""white"") {
+          return { ...prev, white: [...prev.white, move.capturedPiece] };
+        } else {
+          return { ...prev, black: [...prev.black, move.capturedPiece] };
+        }
+      });
+    }
+  };
+  
+  const handleGameEnd = (winner: PieceColor | ""draw"") => {
+    setGameStatus(winner === ""draw"" ? ""stalemate"" : ""checkmate"");
+    console.log(""Game ended. Winner:"", winner);
+  };
+  
+  const handleNewGame = () => {
+    setMoveHistory([]);
+    setCapturedPieces({ white: [], black: [] });
+    setGameStatus(""playing"");
+    
+    // Reset the board
+    if (chessBoardRef.current && chessBoardRef.current.resetBoard) {
+      chessBoardRef.current.resetBoard();
+    }
+  };
+  
+  const handleUndo = () => {
+    if (moveHistory.length === 0) return;
+    
+    // Remove the last move
+    setMoveHistory(prev => {
+      const newHistory = [...prev];
+      newHistory.pop();
+      return newHistory;
+    });
+    
+    // Update captured pieces if needed
+    const lastMove = moveHistory[moveHistory.length - 1];
+    if (lastMove?.capturedPiece) {
+      setCapturedPieces(prev => {
+        if (lastMove.capturedPiece?.color === ""white"") {
+          return {
+            ...prev,
+            white: prev.white.slice(0, -1)
+          };
+        } else {
+          return {
+            ...prev,
+            black: prev.black.slice(0, -1)
+          };
+        }
+      });
+    }
+    
+    // Reset game status
+    setGameStatus(""playing"");
+    
+    // Undo the move on the board
+    if (chessBoardRef.current && chessBoardRef.current.undoLastMove) {
+      chessBoardRef.current.undoLastMove();
+    }
+  };
+  
+  return (
+    <div className=""min-h-screen bg-gray-200 py-10"">
+      <div className=""container mx-auto px-4"">
+        <h1 className=""text-4xl font-bold text-center mb-8"">Chess Game</h1>
+        
+        <div className=""flex flex-col lg:flex-row gap-8 justify-center items-start"">
+          <div>
+            <ChessBoard 
+              onMove={handleMove}
+              onGameEnd={handleGameEnd}
+            />
+          </div>
+          
+          <div className=""flex flex-col gap-6 w-full lg:w-80"">
+            <GameControls 
+              onNewGame={handleNewGame}
+              onUndo={handleUndo}
+              canUndo={moveHistory.length > 0}
+              gameStatus={gameStatus}
+            />
+            
+            <CapturedPieces 
+              capturedPieces={capturedPieces}
+            />
+            
+            <MoveHistory 
+              moves={moveHistory}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default App;
