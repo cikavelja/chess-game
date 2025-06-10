@@ -39,3 +39,27 @@ export interface GameState {
   };
   lastMove?: ChessMove;
 }
+
+export type ChessSkillLevel = 
+  | 'beginner'      // < 1000
+  | 'novice'        // 1000-1199
+  | 'intermediate'  // 1200-1599
+  | 'advanced'      // 1600-1999
+  | 'expert'        // 2000-2199
+  | 'cm'            // Candidate Master ≥ 2200
+  | 'fm'            // FIDE Master ≥ 2300
+  | 'im'            // International Master ≥ 2400
+  | 'gm';           // Grandmaster ≥ 2500
+
+export interface ChessSkillLevelInfo {
+  id: ChessSkillLevel;
+  name: string;
+  rating: string;
+  description: string;
+}
+
+export interface AutoResponseSettings {
+  enabled: boolean;
+  skillLevel: ChessSkillLevel;
+  responseDelay: number; // milliseconds
+}

@@ -1,4 +1,4 @@
-import React, { useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, forwardRef, useImperativeHandle, useEffect } from 'react';
 import ChessSquare from './ChessSquare';
 import PawnPromotionDialog from './PawnPromotionDialog';
 import { ChessMove, ChessPosition, GameState, PieceColor, ChessPiece, PieceType } from '../types/chess-types';
@@ -9,10 +9,11 @@ import { useSoundEffects } from '../hooks/useSoundEffects';
 interface ChessBoardProps {
   onMove?: (move: ChessMove) => void;
   onGameEnd?: (winner: PieceColor | 'draw') => void;
+  onGameStateChange?: (gameState: GameState) => void;
 }
 
-const ChessBoard = forwardRef<{resetBoard: () => void, undoLastMove: () => void}, ChessBoardProps>(
-  ({ onMove, onGameEnd }, ref) => {
+const ChessBoard = forwardRef<{resetBoard: () => void, undoLastMove: () => void, getGameState: () => GameState, makeMove: (move: ChessMove) => void}, ChessBoardProps>(
+  ({ onMove, onGameEnd, onGameStateChange }, ref) => {
   const [gameState, setGameState] = useState<GameState>({
     board: initializeBoard(),
     currentTurn: 'white',
@@ -33,9 +34,15 @@ const ChessBoard = forwardRef<{resetBoard: () => void, undoLastMove: () => void}
     to: ChessPosition;
     color: PieceColor;
   } | null>(null);
-
   // Add sound effects
   const { playMove, playCapture, playCheck, playCastle, playGameEnd } = useSoundEffects();
+
+  // Call onGameStateChange whenever gameState changes
+  useEffect(() => {
+    if (onGameStateChange) {
+      onGameStateChange(gameState);
+    }
+  }, [gameState, onGameStateChange]);
 
   // Handle square click
   const handleSquareClick = (position: ChessPosition) => {
@@ -105,13 +112,25 @@ const ChessBoard = forwardRef<{resetBoard: () => void, undoLastMove: () => void}
         }
       }
     }
-  };
-  // Execute a chess move
+  };  // Execute a chess move
   const makeMove = (from: ChessPosition, to: ChessPosition, promotionPiece?: PieceType) => {
+    // Validate input positions
+    if (!from || !to || 
+        from.row < 0 || from.row > 7 || from.col < 0 || from.col > 7 ||
+        to.row < 0 || to.row > 7 || to.col < 0 || to.col > 7) {
+      console.error('Invalid move positions:', { from, to });
+      return;
+    }
+
     const { board, currentTurn, moveHistory, capturedPieces } = gameState;
     const newBoard = board.map(row => [...row]);
     
-    const movingPiece = newBoard[from.row][from.col]!;
+    const movingPiece = newBoard[from.row][from.col];
+    if (!movingPiece) {
+      console.error('No piece found at position:', from);
+      return;
+    }
+
     const capturedPiece = newBoard[to.row][to.col];
       // Record the captured piece
     const newCapturedPieces = { 
@@ -481,11 +500,26 @@ const ChessBoard = forwardRef<{resetBoard: () => void, undoLastMove: () => void}
     // Play move sound
     playMove();
   };
-  
-  // Expose functions via ref
+    // Expose functions via ref
   useImperativeHandle(ref, () => ({
     resetBoard,
     undoLastMove,
+    getGameState: () => gameState,    makeMove: (move: ChessMove) => {
+      // Validate the move object structure
+      if (!move || !move.from || !move.to) {
+        console.error('Invalid move object:', move);
+        return;
+      }
+      
+      // Validate position properties
+      if (typeof move.from.row !== 'number' || typeof move.from.col !== 'number' ||
+          typeof move.to.row !== 'number' || typeof move.to.col !== 'number') {
+        console.error('Invalid move positions - non-numeric values:', move);
+        return;
+      }
+      
+      makeMove(move.from, move.to, move.promotion);
+    },
   }));
 
   return (
