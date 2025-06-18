@@ -364,6 +364,11 @@ Focus on the most important moments that decided the game.`;
       throw new Error('OpenAI API key not configured');
     }
 
+    // Helper for board bounds
+    const isPositionOnBoard = (pos: any) =>
+      pos && typeof pos.row === 'number' && typeof pos.col === 'number' &&
+      pos.row >= 0 && pos.row <= 7 && pos.col >= 0 && pos.col <= 7;
+
     try {
       // First try SignalR if connected
       if (signalRService.isConnectionEstablished) {
@@ -390,17 +395,17 @@ Focus on the most important moments that decided the game.`;
         try {
           const response = await signalRService.getNextMove(request);
           if (response.success && response.suggestedMove) {
-            console.log('✅ AI move received via SignalR');
-            // Validate move structure
+            // Validate move structure and board bounds
+            const move = response.suggestedMove;
             if (
-              response.suggestedMove.from && response.suggestedMove.to &&
-              typeof response.suggestedMove.from.row === 'number' && typeof response.suggestedMove.from.col === 'number' &&
-              typeof response.suggestedMove.to.row === 'number' && typeof response.suggestedMove.to.col === 'number'
+              move.from && move.to &&
+              isPositionOnBoard(move.from) && isPositionOnBoard(move.to)
             ) {
-              return response.suggestedMove;
+              console.log('✅ AI move received via SignalR');
+              return move;
             } else {
-              console.warn('⚠️ Invalid move positions from SignalR, retrying...');
-              if (retryCount < 1) {
+              console.warn(`⚠️ Invalid move positions from SignalR (attempt ${retryCount + 1}/3):`, move);
+              if (retryCount < 2) {
                 return this.generateMoveForSkillLevel(gameState, moveHistory, skillLevel, retryCount + 1);
               }
               return null;
@@ -468,18 +473,17 @@ Focus on the most important moments that decided the game.`;
         console.warn('⚠️ Error parsing AI move, retrying...', parseError);
       }
 
-      // Validate move structure
+      // Validate move structure and board bounds
       if (
         move &&
         move.from && move.to &&
-        typeof move.from.row === 'number' && typeof move.from.col === 'number' &&
-        typeof move.to.row === 'number' && typeof move.to.col === 'number'
+        isPositionOnBoard(move.from) && isPositionOnBoard(move.to)
       ) {
         console.log('✅ AI move received via direct API');
         return move;
       } else {
-        console.warn('⚠️ Invalid move positions from OpenAI, retrying...');
-        if (retryCount < 1) {
+        console.warn(`⚠️ Invalid move positions from OpenAI (attempt ${retryCount + 1}/3):`, moveText, move);
+        if (retryCount < 2) {
           return this.generateMoveForSkillLevel(gameState, moveHistory, skillLevel, retryCount + 1);
         }
         return null;
@@ -569,6 +573,8 @@ ${instructions}
 Current position (FEN): ${fen}
 Current turn: ${currentTurn}
 Move history: ${moveHistory || 'Game start'}
+
+IMPORTANT: Only suggest moves that are valid on a standard 8x8 chessboard. The move must use valid board coordinates (a-h for files, 1-8 for ranks). Do not suggest moves that are off the board or use invalid squares. The move should be in algebraic notation (e.g., e2e4, Nf3, O-O-O).
 
 Please provide your next move in algebraic notation (e.g., e2e4, Nf3, O-O-O).
     `.trim();

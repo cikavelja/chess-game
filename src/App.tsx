@@ -16,6 +16,15 @@ import { openAIService } from './services/openAIService';
 import { matchService } from './services/matchService';
 import { signalRService } from './services/signalRService';
 
+function isPositionOnBoard(pos: { row: number, col: number }) {
+  return (
+    typeof pos.row === 'number' &&
+    typeof pos.col === 'number' &&
+    pos.row >= 0 && pos.row <= 7 &&
+    pos.col >= 0 && pos.col <= 7
+  );
+}
+
 function App() {
   const [aiOpeningMoveError, setAIOpeningMoveError] = useState<string | null>(null);
   const [signalRConnected, setSignalRConnected] = useState(false);
@@ -120,13 +129,13 @@ function App() {
               console.log('AI move generated:', aiMove);
               if (
                 aiMove.from && aiMove.to &&
-                typeof aiMove.from.row === 'number' && typeof aiMove.from.col === 'number' &&
-                typeof aiMove.to.row === 'number' && typeof aiMove.to.col === 'number' &&
+                isPositionOnBoard(aiMove.from) &&
+                isPositionOnBoard(aiMove.to) &&
                 chessBoardRef.current
               ) {
                 chessBoardRef.current.makeMove(aiMove);
               } else {
-                console.error('Invalid AI move structure:', aiMove);
+                console.error('Invalid AI move structure or out-of-bounds:', aiMove);
               }
             } else {
               console.error('AI failed to generate a move');
@@ -219,16 +228,16 @@ function App() {
                     // Validate AI move structure
                     console.log('AI opening move generated:', aiMove);
                     if (aiMove.from && aiMove.to && 
-                        typeof aiMove.from.row === 'number' && typeof aiMove.from.col === 'number' &&
-                        typeof aiMove.to.row === 'number' && typeof aiMove.to.col === 'number' &&
+                        isPositionOnBoard(aiMove.from) &&
+                        isPositionOnBoard(aiMove.to) &&
                         chessBoardRef.current) {
                       aiMoveMade = true;
                       chessBoardRef.current.makeMove(aiMove);
                       setAIOpeningMoveError(null);
                       console.log('✅ AI opening move completed!');
                     } else {
-                      setAIOpeningMoveError('AI generated invalid move structure. Please check your OpenAI settings.');
-                      console.error('❌ Invalid AI move structure:', aiMove);
+                      setAIOpeningMoveError('AI generated invalid move structure or out-of-bounds. Please check your OpenAI settings.');
+                      console.error('❌ Invalid AI move structure or out-of-bounds:', aiMove);
                     }
                   } else {
                     setAIOpeningMoveError('AI failed to generate a valid opening move. Please check your OpenAI settings.');
@@ -330,12 +339,10 @@ function App() {
       return;
     }
     
-    if (typeof move.from.row !== 'number' || typeof move.from.col !== 'number' ||
-        typeof move.to.row !== 'number' || typeof move.to.col !== 'number') {
-      console.error('Received move with invalid position values:', move);
+    if (!isPositionOnBoard(move.from) || !isPositionOnBoard(move.to)) {
+      console.error('Received move with out-of-bounds position values:', move);
       return;
     }
-    
     if (chessBoardRef.current) {
       chessBoardRef.current.makeMove(move);
     }
